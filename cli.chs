@@ -4,62 +4,75 @@
 
 export trait ParseError : Error {
   // Position of the argument that caused the error/warning.
-  Int position;
+  Nat32 position;
 }
 
 export class ForbiddenArgName : ParseError {
-  Int position;
-  String argName, message;
+  Nat32 position;
+  String message;
+  
+  String argName;
   
   This(_position, _arg) :
     message("Non-ascii character in parameter name of $#{position} argument (`$arg`).") {}
 }
 
 export class EmptyFlagArg : ParseError {
-  Int position;
+  Nat32 position;
   String message;
   
   This(_position) : message("No flags in $#{position} argument, it can be removed.") {}
 }
 
 export class DuplicateFlag : ParseError {
-  Int position;
-  String message, letter;
+  Nat32 position;
+  String message;
+  
+  String letter;
   
   This(_position, _letter) : message("Duplicated flag '$letter' in $#{position} argument, it can be removed.") {}
 }
 
 export class DuplicateNamedArg : ParseError {
-  Int position;
-  String message, name;
+  Nat32 position;
+  String message;
+  
+  String name;
   
   This(_position, _name) : message("Duplicate argument '$name' at position $position.") {}
 }
 
 export class DuplicateDefaultArg : ParseError {
-  Int position;
-  String message, name;
+  Nat32 position;
+  String message;
+  
+  String name;
   
   This(_position, _name) : message("Duplicate argument '$name' at position $position, parameter is default.") {}
 }
 
 export class NamelessAfterNamedArg : ParseError {
-  Int position;
+  Nat32 position;
   String message;
   
   This(_position) : message("Nameless ($#position) argument cannot follow a named argument.") {}
 }
 
 export class UnknownCommand : ParseError {
-  Int position;
-  String message, cmd;
+  Nat32 position;
+  String message;
+  
+  String cmd;
   
   This(_position, _cmd) : message("Unknown command '$cmd' at position $position.") {}
 }
 
 export class ConversionError : ParseError {
-  Int position;
-  String message, arg, value;
+  Nat32 position;
+  String message;
+  
+  String arg;
+  String value;
   type expectedType;
   
   This(_position, _arg, _value, _expectedType) : message("$#position argument '$cmd' at position $position.") {}
@@ -68,6 +81,8 @@ export class ConversionError : ParseError {
 diffLength({}[]String s) => All x, y in s { x.length == y.length -> x = y };
 
 export public class Command {
+  // Version of the program
+  ?String version;
   ///
     Custom part of the help message of the command. Can be printed together with
     usage info.
@@ -82,15 +97,15 @@ export public class Command {
   {}[]String defaultParams where diffLength(defaultParams) = {};
   
   // Arguments of the command.
-  []Record[String\{'flags'}, Arg[this]] args;
+  []Record[String, Arg[this]] args;
   
   ///
-    Required parameters in conjunctive normal form. This is for specifying
+    Required parameters in disjunctive normal form. This is for specifying
     requirements dependent on the presence of more than one argument.
     To make a single argument required, you can also use its `required` property.
     
-    Eg. `{ { 'a' }, { 'a', 'b'}, { 'b', 'c' } }` means ('a' is required) and ('a'
-    or 'b' is required) and ('b' or 'c' is required).
+    Eg. `{ { 'a' }, { 'b', 'c'}, { 'b', 'd' } }` means ('a' is required) or ('b'
+    and 'c' is required) or ('b' or 'd' is required).
     
     The default value means nothing is required.
   ///
@@ -107,6 +122,9 @@ export public class Command {
     
     // A command can have either default param(s) or subcommands, but not both.
     defaultParams is Null | subcommands.isEmpty;
+    
+    // Subcommands do not have version.
+    All ( _, subcommand ) in subcommands: subcommand.version == null;
   }
   
   // Allowed types of command parameters
@@ -149,11 +167,11 @@ export public class Command {
       required -> default == null;
       
       // If the type of the param is bool, flags must be null or a Char.
-      ArgType == Bool -> flags == null | flags is Char;
+      ArgType == Bool -> flags == {} | flags is Char;
     }
   }
   
-  pub static type CmdArgs = Record[keysof args, [key]() => Reflect.getKey(args, key).type];
+  pub static type CmdArgs = Record[Reflect.keysof(args), [key]() => Reflect.getKey(args, key).type];
   
   // Custom validation function that will be run before the handler.
   CmdArgs -> ?Error validate = () => null;
@@ -165,7 +183,7 @@ export public class Command {
     Given arguments, validates them, returns an error if not valid, else executes
     the correct handler and returns its return value.
   ///
-  execute(Folder root, []String args) -> ParseError|Promise[TODO] {
+  execute[Extra]([]String args, Extra extra) -> ParseError|Promise[TODO] {
     Int i = 0;
     
     type ParsedArg = {{
@@ -304,6 +322,6 @@ export public class Command {
       }
     }
     
-    return cmd.handler(processedArgs);
+    return cmd.handler(processedArgs, extra);
   }
 }};
